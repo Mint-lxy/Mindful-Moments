@@ -30,6 +30,7 @@ export interface UserProfile {
   avatar: string;
   themeColor: string; // Hex code
   showMoodChart: boolean;
+  showCalendar: boolean;
 }
 
 export interface DailyJoke {

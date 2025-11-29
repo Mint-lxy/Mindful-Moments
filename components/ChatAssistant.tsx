@@ -135,8 +135,8 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ entries, onStartLi
         )}
       </div>
 
-      {/* Input Area - Fixed at bottom */}
-      <div className="p-3 md:p-4 bg-white border-t border-slate-50 z-10 safe-area-bottom">
+      {/* Input Area - Seamless Connection */}
+      <div className="p-3 md:p-4 bg-white z-10 safe-area-bottom shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
         <div className="flex gap-2 items-end bg-slate-50 p-1.5 rounded-3xl border border-slate-100 focus-within:ring-2 focus-within:ring-primary/10 focus-within:border-primary/30 transition-all">
           <textarea
             value={input}

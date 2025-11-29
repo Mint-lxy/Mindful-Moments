@@ -13,6 +13,7 @@ import {
   Mic, 
   Calendar,
   ChevronRight,
+  ChevronLeft,
   BrainCircuit,
   Loader2,
   StopCircle,
@@ -111,7 +112,8 @@ export const App: React.FC = () => {
     name: '旅行者', 
     avatar: '🐱', 
     themeColor: '#818cf8',
-    showMoodChart: true
+    showMoodChart: true,
+    showCalendar: true
   });
   
   // Avatar Upload State
@@ -119,7 +121,8 @@ export const App: React.FC = () => {
   
   // Detail View State
   const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null);
-  
+  const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
+
   // Clear Data State
   const [clearDataStep, setClearDataStep] = useState<number>(0); // 0: off, 1: first confirm, 2: final confirm
   
@@ -129,6 +132,9 @@ export const App: React.FC = () => {
   // Date Filter State
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [filterDate, setFilterDate] = useState('');
+
+  // Calendar State
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
 
   // Voice Recording State
   const [isRecording, setIsRecording] = useState(false);
@@ -157,7 +163,11 @@ export const App: React.FC = () => {
         if (savedProfile) {
             // Migrate old profile structure if needed
             const parsed = JSON.parse(savedProfile);
-            setUserProfile({ ...parsed, showMoodChart: parsed.showMoodChart ?? true });
+            setUserProfile({ 
+                ...parsed, 
+                showMoodChart: parsed.showMoodChart ?? true,
+                showCalendar: parsed.showCalendar ?? true 
+            });
         }
 
         const savedJoke = localStorage.getItem('mindful_moments_joke');
@@ -166,6 +176,11 @@ export const App: React.FC = () => {
         console.error("Failed to load from storage", e);
     }
   }, []);
+
+  // Reset delete confirmation when selected entry changes
+  useEffect(() => {
+    setIsDeleteConfirming(false);
+  }, [selectedEntry]);
 
   // Save entries to local storage
   useEffect(() => {
@@ -488,6 +503,122 @@ export const App: React.FC = () => {
   // Safe Top Spacer Component for Views
   const SafeTopSpacer = () => <div className="w-full h-12 flex-shrink-0" />;
 
+  // Calendar Components
+  const CalendarWidget = () => {
+    const getDaysInMonth = (date: Date) => {
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const days = new Date(year, month + 1, 0).getDate();
+      const firstDay = new Date(year, month, 1).getDay(); // 0 is Sunday
+      // Adjust so 0 is Monday (1) -> 6 is Sunday (0) if we want Mon start
+      // Standard JS: 0=Sun, 1=Mon. Let's start with Sun for simplicity or Mon.
+      // Let's do Mon start: 1->0, 2->1 ... 0->6
+      const firstDayAdjusted = firstDay === 0 ? 6 : firstDay - 1; 
+      
+      return { days, firstDay: firstDayAdjusted };
+    };
+
+    const { days, firstDay } = getDaysInMonth(calendarMonth);
+    const today = new Date();
+    const isCurrentMonth = today.getMonth() === calendarMonth.getMonth() && today.getFullYear() === calendarMonth.getFullYear();
+
+    const changeMonth = (delta: number) => {
+        const newDate = new Date(calendarMonth);
+        newDate.setMonth(newDate.getMonth() + delta);
+        setCalendarMonth(newDate);
+    };
+
+    // Check if a specific day has an entry
+    const hasEntry = (day: number) => {
+        const year = calendarMonth.getFullYear();
+        const month = String(calendarMonth.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(day).padStart(2, '0');
+        const dateStr = `${year}-${month}-${dayStr}`;
+        return entries.some(e => e.date.startsWith(dateStr));
+    };
+
+    const isSelected = (day: number) => {
+        if (!filterDate) return false;
+        const year = calendarMonth.getFullYear();
+        const month = String(calendarMonth.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(day).padStart(2, '0');
+        return filterDate === `${year}-${month}-${dayStr}`;
+    };
+
+    const handleDateClick = (day: number) => {
+        const year = calendarMonth.getFullYear();
+        const month = String(calendarMonth.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(day).padStart(2, '0');
+        const dateStr = `${year}-${month}-${dayStr}`;
+        
+        if (filterDate === dateStr) {
+            setFilterDate('');
+            setShowDateFilter(false);
+        } else {
+            setFilterDate(dateStr);
+            setShowDateFilter(true);
+        }
+    };
+
+    return (
+        <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden">
+             {/* Header */}
+             <div className="flex justify-between items-center mb-4">
+                 <h3 className="text-base font-bold text-slate-700">
+                    {calendarMonth.getFullYear()}年 {calendarMonth.getMonth() + 1}月
+                 </h3>
+                 <div className="flex gap-1">
+                     <button onClick={() => changeMonth(-1)} className="p-1 rounded-full hover:bg-slate-100 text-slate-400">
+                         <ChevronLeft size={18} />
+                     </button>
+                     <button onClick={() => changeMonth(1)} className="p-1 rounded-full hover:bg-slate-100 text-slate-400">
+                         <ChevronRight size={18} />
+                     </button>
+                 </div>
+             </div>
+
+             {/* Grid */}
+             <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                 {['一', '二', '三', '四', '五', '六', '日'].map(d => (
+                     <div key={d} className="text-[10px] text-slate-400 font-bold py-1">{d}</div>
+                 ))}
+             </div>
+             <div className="grid grid-cols-7 gap-1">
+                 {Array.from({ length: firstDay }).map((_, i) => (
+                     <div key={`empty-${i}`} />
+                 ))}
+                 {Array.from({ length: days }).map((_, i) => {
+                     const day = i + 1;
+                     const isToday = isCurrentMonth && today.getDate() === day;
+                     const marked = hasEntry(day);
+                     const selected = isSelected(day);
+
+                     return (
+                         <div key={day} className="flex flex-col items-center justify-center aspect-square">
+                             <button 
+                                onClick={() => handleDateClick(day)}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all relative
+                                    ${selected 
+                                        ? 'bg-primary text-white shadow-md shadow-primary/30' 
+                                        : isToday 
+                                            ? 'bg-primary/10 text-primary font-bold' 
+                                            : 'text-slate-600 hover:bg-slate-50'
+                                    }
+                                `}
+                             >
+                                 {day}
+                                 {marked && !selected && (
+                                     <div className="absolute bottom-1 w-1 h-1 bg-accent rounded-full"></div>
+                                 )}
+                             </button>
+                         </div>
+                     );
+                 })}
+             </div>
+        </div>
+    );
+  };
+
   return (
     <div className={mainContainerClasses}>
 
@@ -678,15 +809,32 @@ export const App: React.FC = () => {
                     <div className="h-8"></div> {/* Bottom Spacer within scroll */}
                 </div>
 
-                {/* Footer with Delete */}
+                {/* Footer with Delete Confirmation */}
                 <div className="p-4 border-t border-slate-100 bg-white safe-area-bottom">
-                     <button 
-                        onClick={() => handleDeleteEntry(selectedEntry.id)}
-                        className="w-full py-3 rounded-xl border border-red-100 text-red-500 font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2 text-sm"
-                     >
-                         <Trash2 size={16} />
-                         删除这篇日记
-                     </button>
+                     {isDeleteConfirming ? (
+                         <div className="flex gap-3 animate-fadeIn">
+                             <button 
+                                onClick={() => setIsDeleteConfirming(false)}
+                                className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors text-sm"
+                             >
+                                 取消
+                             </button>
+                             <button 
+                                onClick={() => handleDeleteEntry(selectedEntry.id)}
+                                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600 transition-colors shadow-lg shadow-red-500/30 text-sm"
+                             >
+                                 确认删除
+                             </button>
+                         </div>
+                     ) : (
+                         <button 
+                            onClick={() => setIsDeleteConfirming(true)}
+                            className="w-full py-3 rounded-xl border border-red-100 text-red-500 font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2 text-sm"
+                         >
+                             <Trash2 size={16} />
+                             删除这篇日记
+                         </button>
+                     )}
                 </div>
             </div>
         </div>
@@ -735,24 +883,52 @@ export const App: React.FC = () => {
           </div>
       )}
 
-      {/* Navigation */}
-      <nav className={`fixed bottom-0 left-0 w-full md:w-20 md:h-full bg-white/90 backdrop-blur-lg border-t md:border-t-0 md:border-r border-slate-200 z-50 flex md:flex-col justify-around md:justify-start md:pt-8 md:gap-8 items-center h-20 md:h-full shadow-[0_-5px_20px_rgba(0,0,0,0.03)] md:shadow-none safe-area-bottom`}>
-         <div className="hidden md:flex flex-col items-center mb-4 cursor-pointer hover:scale-105 transition-transform" onClick={() => setView(AppView.SETTINGS)}>
-            <AvatarDisplay avatar={userProfile.avatar} size="md" className="shadow-primary/30" />
-         </div>
-         <button onClick={() => setView(AppView.DASHBOARD)} className={`p-3 rounded-2xl transition-all flex flex-col md:block items-center gap-1 ${view === AppView.DASHBOARD ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-110' : 'text-slate-400 hover:bg-slate-100'}`}>
-            <BookHeart size={22} />
-            <span className="text-[10px] font-medium md:hidden">日记</span>
-         </button>
-         <button onClick={() => setView(AppView.NEW_ENTRY)} className={`p-3 rounded-2xl transition-all flex flex-col md:block items-center gap-1 ${view === AppView.NEW_ENTRY ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-110' : 'text-slate-400 hover:bg-slate-100'}`}>
-            <Plus size={22} />
-            <span className="text-[10px] font-medium md:hidden">记录</span>
-         </button>
-         <button onClick={() => setView(AppView.CHAT)} className={`p-3 rounded-2xl transition-all flex flex-col md:block items-center gap-1 ${(view === AppView.CHAT || view === AppView.LIVE_SESSION) ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-110' : 'text-slate-400 hover:bg-slate-100'}`}>
-            <MessageCircle size={22} />
-            <span className="text-[10px] font-medium md:hidden">助手</span>
-         </button>
-      </nav>
+{/* Navigation */}
+<nav className={`fixed bottom-0 left-0 w-full md:w-20 md:h-full bg-white/90 backdrop-blur-lg border-t md:border-t-0 md:border-r border-slate-200 z-50 
+  flex md:flex-col justify-around md:justify-start md:pt-8 md:gap-8 items-center h-16 md:h-full 
+  shadow-[0_-5px_20px_rgba(0,0,0,0.03)] md:shadow-none safe-area-bottom`}>
+
+  {/* 用户头像 - 仅桌面显示 */}
+  <div className="hidden md:flex flex-col items-center mb-4 cursor-pointer hover:scale-105 transition-transform" onClick={() => setView(AppView.SETTINGS)}>
+    <AvatarDisplay avatar={userProfile.avatar} size="md" className="shadow-primary/30" />
+  </div>
+
+  {/* 日记 */}
+  <button 
+    onClick={() => setView(AppView.DASHBOARD)} 
+    className={`px-3 py-2 rounded-xl transition-all duration-200 flex flex-col md:block items-center gap-1 
+      ${view === AppView.DASHBOARD 
+        ? 'bg-primary/85 text-white shadow-lg shadow-primary/40 scale-103' 
+        : 'text-slate-400 hover:bg-slate-100'}`}
+  >
+    <BookHeart size={22} />
+    <span className="text-[10px] font-medium md:hidden">日记</span>
+  </button>
+
+  {/* 记录 */}
+  <button 
+    onClick={() => setView(AppView.NEW_ENTRY)} 
+    className={`px-3 py-2 rounded-xl transition-all duration-200 flex flex-col md:block items-center gap-1 
+      ${view === AppView.NEW_ENTRY 
+        ? 'bg-primary/85 text-white shadow-lg shadow-primary/40 scale-103' 
+        : 'text-slate-400 hover:bg-slate-100'}`}
+  >
+    <Plus size={22} />
+    <span className="text-[10px] font-medium md:hidden">记录</span>
+  </button>
+
+  {/* 助手 */}
+  <button 
+    onClick={() => setView(AppView.CHAT)} 
+    className={`px-3 py-2 rounded-xl transition-all duration-200 flex flex-col md:block items-center gap-1 
+      ${(view === AppView.CHAT || view === AppView.LIVE_SESSION) 
+        ? 'bg-primary/85 text-white shadow-lg shadow-primary/40 scale-103' 
+        : 'text-slate-400 hover:bg-slate-100'}`}
+  >
+    <MessageCircle size={22} />
+    <span className="text-[10px] font-medium md:hidden">助手</span>
+  </button>
+</nav>
 
       {/* Main Content Area */}
       <main className={`flex-1 ${isChatView ? 'h-full md:pl-20 overflow-hidden' : 'max-w-4xl mx-auto p-4 md:p-8'}`}>
@@ -761,13 +937,12 @@ export const App: React.FC = () => {
         {!isChatView && view !== AppView.SETTINGS && (
             <>
             <SafeTopSpacer />
-            <header className="flex justify-between items-center mb-8 relative z-10">
+            <header className="flex justify-between items-center mb-6 relative z-10">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
                         <span className="mr-2 inline-block animate-bounce delay-1000">👋</span>
                         {getGreeting()}，{userProfile.name}
                     </h1>
-                    <p className="text-slate-500 text-sm mt-1">今天也要开心鸭！</p>
                 </div>
                 <div 
                     className="cursor-pointer hover:rotate-12 transition-transform md:hidden"
@@ -780,28 +955,35 @@ export const App: React.FC = () => {
         )}
 
         {view === AppView.DASHBOARD && (
-          <div className="space-y-6 animate-fadeIn pb-10">
-            {/* Daily Joke Widget - Simplified */}
-            <div className="relative bg-white rounded-3xl p-5 shadow-sm border border-slate-100 overflow-hidden">
+          <div className="space-y-5 animate-fadeIn pb-10">
+            {/* Daily Joke Widget - Compacted UI */}
+            <div className="relative bg-white rounded-3xl p-4 shadow-sm border border-slate-100 overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-100 rounded-full -mr-16 -mt-16 blur-3xl opacity-50"></div>
                 
-                <div className="relative z-10 flex flex-col gap-3">
-                     <div className="flex items-center gap-2 mb-1">
-                         <div className="bg-yellow-100 text-yellow-600 p-1.5 rounded-lg">
-                             <Smile size={16} />
+                <div className="relative z-10 flex flex-col gap-2">
+                     <div className="flex items-center gap-2">
+                         <div className="bg-yellow-100 text-yellow-600 p-1 rounded-lg">
+                             <Smile size={14} />
                          </div>
-                         <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">每日一笑</span>
+                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">每日一笑</span>
                      </div>
                      <div 
-                        className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100/50 min-h-[60px] flex items-center justify-center text-center cursor-pointer hover:bg-slate-50 transition-colors"
+                        className="bg-slate-50/50 rounded-xl p-3 border border-slate-100/50 flex items-center justify-center text-center cursor-pointer hover:bg-slate-50 transition-colors"
                         onClick={() => fetchDailyJoke().then(c => setDailyJoke({...dailyJoke!, content: c}))}
                     >
-                        <p className="text-slate-700 text-sm font-medium leading-relaxed">
+                        <p className="text-slate-700 text-xs font-medium leading-relaxed">
                             {dailyJoke?.content || "正在加载快乐..."}
                         </p>
                      </div>
                 </div>
             </div>
+
+            {/* Calendar Widget (Conditionally Rendered) */}
+            {userProfile.showCalendar && (
+                <section>
+                    <CalendarWidget />
+                </section>
+            )}
 
             {/* Mood Chart (Conditionally Rendered) */}
             {userProfile.showMoodChart && (
@@ -819,12 +1001,7 @@ export const App: React.FC = () => {
                   <div className="flex items-center gap-2">
                       {showDateFilter ? (
                           <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 animate-fadeIn shadow-sm">
-                              <input 
-                                type="date" 
-                                value={filterDate} 
-                                onChange={(e) => setFilterDate(e.target.value)}
-                                className="text-xs border-none focus:ring-0 text-slate-600 bg-transparent outline-none"
-                              />
+                              <span className="text-xs text-slate-500 pl-1">{filterDate}</span>
                               <button onClick={() => { setFilterDate(''); setShowDateFilter(false); }} className="text-slate-400 hover:text-red-400 p-1">
                                   <X size={14} />
                               </button>
@@ -1100,10 +1277,10 @@ export const App: React.FC = () => {
                         <div className="absolute bottom-0 left-0 w-32 h-32 bg-accent/5 rounded-full -ml-10 -mb-10 blur-2xl"></div>
                         <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 relative z-10">
                             <Palette size={16} className="text-primary" />
-                            主题色调
+                            主题与功能
                         </h3>
                         
-                        <div className="grid grid-cols-4 gap-3 relative z-10 mb-4">
+                        <div className="grid grid-cols-4 gap-3 relative z-10 mb-6">
                             {PRESET_COLORS.map((color) => (
                                 <button
                                     key={color.hex}
@@ -1125,17 +1302,32 @@ export const App: React.FC = () => {
                             ))}
                         </div>
 
-                         <div className="flex items-center justify-between border-t border-slate-100 pt-4 relative z-10">
-                             <div>
-                                 <h4 className="text-xs font-bold text-slate-700">显示心情趋势</h4>
-                                 <p className="text-[10px] text-slate-400">在首页展示心情变化曲线</p>
+                         <div className="space-y-4 border-t border-slate-100 pt-4 relative z-10">
+                             <div className="flex items-center justify-between">
+                                 <div>
+                                     <h4 className="text-xs font-bold text-slate-700">显示心情趋势</h4>
+                                     <p className="text-[10px] text-slate-400">在首页展示心情变化曲线</p>
+                                 </div>
+                                 <button 
+                                    onClick={() => setUserProfile(p => ({ ...p, showMoodChart: !p.showMoodChart }))}
+                                    className={`w-10 h-5 rounded-full p-1 transition-colors ${userProfile.showMoodChart ? 'bg-primary' : 'bg-slate-200'}`}
+                                 >
+                                     <div className={`w-3 h-3 bg-white rounded-full transition-transform ${userProfile.showMoodChart ? 'translate-x-5' : 'translate-x-0'}`} />
+                                 </button>
                              </div>
-                             <button 
-                                onClick={() => setUserProfile(p => ({ ...p, showMoodChart: !p.showMoodChart }))}
-                                className={`w-10 h-5 rounded-full p-1 transition-colors ${userProfile.showMoodChart ? 'bg-primary' : 'bg-slate-200'}`}
-                             >
-                                 <div className={`w-3 h-3 bg-white rounded-full transition-transform ${userProfile.showMoodChart ? 'translate-x-5' : 'translate-x-0'}`} />
-                             </button>
+                             
+                             <div className="flex items-center justify-between">
+                                 <div>
+                                     <h4 className="text-xs font-bold text-slate-700">显示日历视图</h4>
+                                     <p className="text-[10px] text-slate-400">在首页展示月度记录日历</p>
+                                 </div>
+                                 <button 
+                                    onClick={() => setUserProfile(p => ({ ...p, showCalendar: !p.showCalendar }))}
+                                    className={`w-10 h-5 rounded-full p-1 transition-colors ${userProfile.showCalendar ? 'bg-primary' : 'bg-slate-200'}`}
+                                 >
+                                     <div className={`w-3 h-3 bg-white rounded-full transition-transform ${userProfile.showCalendar ? 'translate-x-5' : 'translate-x-0'}`} />
+                                 </button>
+                             </div>
                          </div>
                     </div>
 
@@ -1149,7 +1341,7 @@ export const App: React.FC = () => {
                     </div>
                     
                     <div className="text-center text-slate-300 text-[10px] pb-2">
-                        Mindful Moments v1.5 &bull; Made with 💖 & Gemini
+                        Mindful Moments v1.6 &bull; Made with 💖 & Gemini
                     </div>
                 </div>
             </div>
