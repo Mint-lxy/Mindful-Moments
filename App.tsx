@@ -129,9 +129,10 @@ export const App: React.FC = () => {
   // Daily Joke
   const [dailyJoke, setDailyJoke] = useState<DailyJoke | null>(null);
 
-  // Date Filter State
+  // Search & Filter State
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [filterDate, setFilterDate] = useState('');
+  const [searchKeyword, setSearchKeyword] = useState('');
 
   // Calendar State
   const [calendarMonth, setCalendarMonth] = useState(new Date());
@@ -245,10 +246,21 @@ export const App: React.FC = () => {
     setIsAnalyzing(true);
     try {
       const analysis = await analyzeDiaryEntry(newEntryText, newEntryAttachments);
+      
+      // Determine date: use filterDate if set, otherwise current time
+      let entryDate = new Date();
+      if (filterDate) {
+          // preserve current time but on selected date
+          const selected = new Date(filterDate);
+          entryDate.setFullYear(selected.getFullYear());
+          entryDate.setMonth(selected.getMonth());
+          entryDate.setDate(selected.getDate());
+      }
+
       const newEntry: DiaryEntry = {
         id: Date.now().toString(),
         content: newEntryText,
-        date: new Date().toISOString(),
+        date: entryDate.toISOString(),
         moodScore: analysis.moodScore || 5,
         tags: analysis.tags || [],
         summary: analysis.summary || "暂无总结",
@@ -259,6 +271,8 @@ export const App: React.FC = () => {
       setEntries([newEntry, ...entries]);
       setNewEntryText('');
       setNewEntryAttachments([]);
+      setFilterDate(''); // Reset filter after saving
+      setShowDateFilter(false);
       setView(AppView.DASHBOARD);
     } catch (e) {
       console.error(e);
@@ -471,9 +485,22 @@ export const App: React.FC = () => {
   };
 
   const filteredEntries = entries.filter(entry => {
-    if (!filterDate) return true;
-    const entryISO = entry.date.split('T')[0];
-    return entryISO === filterDate;
+    // Date Filter
+    if (filterDate) {
+        const entryISO = entry.date.split('T')[0];
+        if (entryISO !== filterDate) return false;
+    }
+    
+    // Keyword Filter
+    if (searchKeyword) {
+        const lowerKeyword = searchKeyword.toLowerCase();
+        const matchesContent = entry.content.toLowerCase().includes(lowerKeyword);
+        const matchesSummary = entry.summary.toLowerCase().includes(lowerKeyword);
+        const matchesTags = entry.tags?.some(tag => tag.toLowerCase().includes(lowerKeyword));
+        return matchesContent || matchesSummary || matchesTags;
+    }
+
+    return true;
   });
 
   // Calculate layout classes based on view
@@ -510,11 +537,7 @@ export const App: React.FC = () => {
       const month = date.getMonth();
       const days = new Date(year, month + 1, 0).getDate();
       const firstDay = new Date(year, month, 1).getDay(); // 0 is Sunday
-      // Adjust so 0 is Monday (1) -> 6 is Sunday (0) if we want Mon start
-      // Standard JS: 0=Sun, 1=Mon. Let's start with Sun for simplicity or Mon.
-      // Let's do Mon start: 1->0, 2->1 ... 0->6
       const firstDayAdjusted = firstDay === 0 ? 6 : firstDay - 1; 
-      
       return { days, firstDay: firstDayAdjusted };
     };
 
@@ -528,7 +551,6 @@ export const App: React.FC = () => {
         setCalendarMonth(newDate);
     };
 
-    // Check if a specific day has an entry
     const hasEntry = (day: number) => {
         const year = calendarMonth.getFullYear();
         const month = String(calendarMonth.getMonth() + 1).padStart(2, '0');
@@ -561,29 +583,29 @@ export const App: React.FC = () => {
     };
 
     return (
-        <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden">
+        <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden">
              {/* Header */}
-             <div className="flex justify-between items-center mb-4">
-                 <h3 className="text-base font-bold text-slate-700">
+             <div className="flex justify-between items-center mb-2">
+                 <h3 className="text-sm font-bold text-slate-700">
                     {calendarMonth.getFullYear()}年 {calendarMonth.getMonth() + 1}月
                  </h3>
                  <div className="flex gap-1">
                      <button onClick={() => changeMonth(-1)} className="p-1 rounded-full hover:bg-slate-100 text-slate-400">
-                         <ChevronLeft size={18} />
+                         <ChevronLeft size={16} />
                      </button>
                      <button onClick={() => changeMonth(1)} className="p-1 rounded-full hover:bg-slate-100 text-slate-400">
-                         <ChevronRight size={18} />
+                         <ChevronRight size={16} />
                      </button>
                  </div>
              </div>
 
              {/* Grid */}
-             <div className="grid grid-cols-7 gap-1 text-center mb-2">
+             <div className="grid grid-cols-7 gap-0.5 text-center mb-1">
                  {['一', '二', '三', '四', '五', '六', '日'].map(d => (
                      <div key={d} className="text-[10px] text-slate-400 font-bold py-1">{d}</div>
                  ))}
              </div>
-             <div className="grid grid-cols-7 gap-1">
+             <div className="grid grid-cols-7 gap-0.5">
                  {Array.from({ length: firstDay }).map((_, i) => (
                      <div key={`empty-${i}`} />
                  ))}
@@ -597,7 +619,7 @@ export const App: React.FC = () => {
                          <div key={day} className="flex flex-col items-center justify-center aspect-square">
                              <button 
                                 onClick={() => handleDateClick(day)}
-                                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all relative
+                                className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-medium transition-all relative
                                     ${selected 
                                         ? 'bg-primary text-white shadow-md shadow-primary/30' 
                                         : isToday 
@@ -765,7 +787,14 @@ export const App: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Attachments */}
+                    {/* Text Content */}
+                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                         <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap font-medium">
+                             {selectedEntry.content}
+                         </p>
+                    </div>
+
+                    {/* Attachments (Moved Below Text) */}
                     {selectedEntry.attachments && selectedEntry.attachments.length > 0 && (
                         <div className={`grid gap-3 ${selectedEntry.attachments.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                             {selectedEntry.attachments.map((att, idx) => (
@@ -779,13 +808,6 @@ export const App: React.FC = () => {
                             ))}
                         </div>
                     )}
-
-                    {/* Text Content */}
-                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                         <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap font-medium">
-                             {selectedEntry.content}
-                         </p>
-                    </div>
 
                     {/* AI Analysis */}
                     <div className="bg-gradient-to-br from-primary/5 to-secondary/5 p-5 rounded-3xl border border-primary/10">
@@ -884,9 +906,9 @@ export const App: React.FC = () => {
       )}
 
 {/* Navigation */}
-<nav className={`fixed bottom-0 left-0 w-full md:w-20 md:h-full bg-white/90 backdrop-blur-lg border-t md:border-t-0 md:border-r border-slate-200 z-50 
-  flex md:flex-col justify-around md:justify-start md:pt-8 md:gap-8 items-center h-16 md:h-full 
-  shadow-[0_-5px_20px_rgba(0,0,0,0.03)] md:shadow-none safe-area-bottom`}>
+<nav className={`fixed bottom-0 left-0 w-full md:w-20 md:h-full transition-all duration-300 z-50 
+  flex md:flex-col justify-around md:justify-start md:pt-8 md:gap-8 items-center h-16 md:h-full safe-area-bottom 
+  ${isChatView ? 'border-t-0 shadow-none bg-white' : 'bg-white/90 backdrop-blur-lg border-t md:border-t-0 md:border-r border-slate-200 shadow-[0_-5px_20px_rgba(0,0,0,0.03)] md:shadow-none'}`}>
 
   {/* 用户头像 - 仅桌面显示 */}
   <div className="hidden md:flex flex-col items-center mb-4 cursor-pointer hover:scale-105 transition-transform" onClick={() => setView(AppView.SETTINGS)}>
@@ -995,31 +1017,60 @@ export const App: React.FC = () => {
             <section>
               <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-primary" />
+                    <BookHeart className="w-5 h-5 text-primary" />
                     近期日记
                   </h2>
                   <div className="flex items-center gap-2">
-                      {showDateFilter ? (
-                          <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 animate-fadeIn shadow-sm">
-                              <span className="text-xs text-slate-500 pl-1">{filterDate}</span>
-                              <button onClick={() => { setFilterDate(''); setShowDateFilter(false); }} className="text-slate-400 hover:text-red-400 p-1">
-                                  <X size={14} />
-                              </button>
-                          </div>
-                      ) : (
-                          <button onClick={() => setShowDateFilter(true)} className="p-2 text-slate-400 hover:bg-white hover:text-primary rounded-full transition-all">
-                              <Search size={18} />
-                          </button>
-                      )}
+                      
+                      {/* Search Bar */}
+                      <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                            <input 
+                                type="text" 
+                                placeholder="搜索..." 
+                                value={searchKeyword}
+                                onChange={(e) => setSearchKeyword(e.target.value)}
+                                className="pl-8 pr-3 py-1.5 w-24 focus:w-40 bg-white border border-slate-200 rounded-full text-xs transition-all focus:ring-2 focus:ring-primary/20 focus:outline-none placeholder-slate-400"
+                            />
+                      </div>
+
+                      <div className="w-px h-4 bg-slate-200 mx-1"></div>
+
+                      <button 
+                        onClick={() => setShowDateFilter(!showDateFilter)} 
+                        className={`p-2 rounded-full transition-all ${showDateFilter || filterDate ? 'bg-primary/10 text-primary' : 'text-slate-400 hover:bg-white'}`}
+                      >
+                          <Calendar size={18} />
+                      </button>
                   </div>
               </div>
+              
+              {/* Date Filter Input (Expandable) */}
+              {showDateFilter && (
+                <div className="mb-4 flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 animate-fadeIn shadow-sm">
+                    <span className="text-xs text-slate-500 font-bold px-2">按日期筛选:</span>
+                    <input 
+                        type="date"
+                        value={filterDate}
+                        onChange={(e) => setFilterDate(e.target.value)}
+                        className="text-xs bg-slate-50 border-none rounded-lg py-1 px-2 focus:ring-0 text-slate-600 outline-none"
+                    />
+                    {filterDate && (
+                        <button onClick={() => setFilterDate('')} className="p-1 hover:bg-slate-100 rounded-full text-slate-400">
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
+              )}
               
               <div className="grid gap-4">
                 {filteredEntries.length === 0 ? (
                     <div className="text-center py-16 bg-white/50 rounded-3xl border border-slate-100 border-dashed">
                         <div className="text-4xl mb-3 grayscale opacity-50">🍃</div>
-                        <p className="text-slate-400 text-sm mb-4">{entries.length === 0 ? "这里还空空的，写下第一篇日记吧~" : "这一天好像在偷懒哦~"}</p>
-                        {entries.length === 0 && (
+                        <p className="text-slate-400 text-sm mb-4">
+                            {searchKeyword || filterDate ? "没有找到匹配的日记" : (entries.length === 0 ? "这里还空空的，写下第一篇日记吧~" : "这一天好像在偷懒哦~")}
+                        </p>
+                        {entries.length === 0 && !searchKeyword && !filterDate && (
                             <button onClick={() => setView(AppView.NEW_ENTRY)} className="px-6 py-2 bg-primary text-white rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all text-sm font-bold">
                                 开始记录
                             </button>
@@ -1080,9 +1131,18 @@ export const App: React.FC = () => {
         {view === AppView.NEW_ENTRY && (
           <div className="max-w-2xl mx-auto animate-fadeIn">
             <SafeTopSpacer />
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <div className="w-2 h-6 bg-primary rounded-full"></div>
-                记录美好此刻
+            <h2 className="text-xl font-bold mb-6 flex items-center gap-2 justify-between">
+                <div className="flex items-center gap-2">
+                    <div className="w-2 h-6 bg-primary rounded-full"></div>
+                    记录美好此刻
+                </div>
+                {filterDate && (
+                    <div className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold flex items-center gap-1">
+                        <Calendar size={12} />
+                        补写: {filterDate}
+                        <button onClick={() => { setFilterDate(''); }} className="ml-1 hover:bg-primary/20 rounded-full p-0.5"><X size={10} /></button>
+                    </div>
+                )}
             </h2>
             <div className="bg-white p-2 rounded-[2rem] shadow-sm border border-slate-100">
                 <div className="relative bg-slate-50 rounded-[1.5rem] border border-slate-100/50 transition-colors focus-within:bg-white focus-within:border-primary/20 focus-within:ring-4 focus-within:ring-primary/5">

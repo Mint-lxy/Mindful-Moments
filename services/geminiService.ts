@@ -84,7 +84,11 @@ export const fetchDailyJoke = async (): Promise<string> => {
     try {
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: "讲一个简短的、幽默的冷笑话，适合放在APP首页作为每日一笑。只返回笑话内容，不要其他文字，不要包含标题。",
+            contents: {
+                parts: [
+                    { text: "讲一个适合放在应用首页的简短幽默冷笑话。仅返回笑话内容，不包含标题或其他解释。" }
+                ]
+            },
         });
         return response.text?.trim() || "今天的天气真不错！(AI 似乎在发呆)";
     } catch (error) {

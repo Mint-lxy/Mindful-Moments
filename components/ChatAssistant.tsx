@@ -82,7 +82,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ entries, onStartLi
   const HeaderSpacer = () => <div className="w-full h-12 flex-shrink-0" />;
 
   return (
-    <div className="flex flex-col h-full bg-white md:rounded-3xl shadow-sm md:border border-slate-100 overflow-hidden relative">
+    <div className="flex flex-col h-full bg-white md:rounded-3xl shadow-sm md:border border-slate-100 overflow-hidden relative pb-[env(safe-area-inset-bottom)]">
       
       {/* Header Container */}
       <div className="relative z-10 bg-white/95 backdrop-blur-md border-b border-slate-50">
@@ -133,12 +133,14 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ entries, onStartLi
                 </div>
             </div>
         )}
+        {/* Extra spacer at bottom of messages to prevent hidden content behind input */}
+        <div className="h-6"></div>
       </div>
 
-      {/* Input Area - Seamless Connection */}
-      <div className="p-3 md:p-4 bg-white z-10 safe-area-bottom shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
-        <div className="flex gap-2 items-end bg-slate-50 p-1.5 rounded-3xl border border-slate-100 focus-within:ring-2 focus-within:ring-primary/10 focus-within:border-primary/30 transition-all">
-          <textarea
+{/* Input Area - Seamless Connection */}
+<div className="p-3 md:p-4 bg-white z-10 pb-[env(safe-area-inset-bottom)] md:pb-4 border-t border-slate-50 md:border-t-0">
+    <div className="flex gap-2 items-end bg-slate-50 p-1.5 rounded-3xl border border-slate-100 focus-within:ring-2 focus-within:ring-primary/10 focus-within:border-primary/30 transition-all">
+        <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -150,14 +152,14 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ entries, onStartLi
             placeholder="聊聊你的想法..."
             className="flex-1 px-4 py-2.5 max-h-32 min-h-[44px] bg-transparent text-sm resize-none focus:outline-none placeholder-slate-400"
             rows={1}
-          />
-          <button 
+        />
+        <button 
             onClick={handleSend}
             disabled={isLoading || !input.trim()}
             className="p-2.5 bg-primary text-white rounded-full hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-primary/20 mb-0.5 mr-0.5"
-          >
+        >
             <Send size={18} />
-          </button>
+        </button>
         </div>
       </div>
     </div>
