@@ -25,15 +25,26 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+export type AIProvider = 'Gemini' | 'DeepSeek' | 'SiliconFlow';
+
 export interface UserProfile {
   name: string;
   avatar: string;
   themeColor: string; // Hex code
   showMoodChart: boolean;
   showCalendar: boolean;
+  aiProvider: AIProvider; // Selected Provider
+  apiKey?: string; // Custom API Key
+  customModel?: string; // Model name for SiliconFlow (e.g., deepseek-ai/DeepSeek-V3)
 }
 
 export interface DailyJoke {
   date: string;
   content: string;
+}
+
+export interface AIConfig {
+  provider: AIProvider;
+  apiKey?: string;
+  model?: string;
 }

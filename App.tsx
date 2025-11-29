@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { DiaryEntry, AppView, UserProfile, DailyJoke } from './types';
+import { DiaryEntry, AppView, UserProfile, DailyJoke, AIConfig } from './types';
 import { analyzeDiaryEntry, transcribeAudio, fetchDailyJoke } from './services/geminiService';
 import { arrayBufferToBase64 } from './services/audioUtils';
 import { LiveSession } from './components/LiveSession';
@@ -40,7 +41,15 @@ import {
   AlertTriangle,
   Maximize2,
   Tag,
-  Pipette
+  Pipette,
+  Share2,
+  Copy,
+  Smartphone,
+  ToggleLeft,
+  ToggleRight,
+  Sliders,
+  Cpu,
+  Server
 } from 'lucide-react';
 
 // Cute Color Palette
@@ -107,13 +116,20 @@ export const App: React.FC = () => {
   const [newEntryAttachments, setNewEntryAttachments] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
+  // New Entry Options
+  const [useAIAnalysis, setUseAIAnalysis] = useState(true);
+  const [manualMoodScore, setManualMoodScore] = useState(5);
+  
   // User Profile
   const [userProfile, setUserProfile] = useState<UserProfile>({ 
     name: '旅行者', 
     avatar: '🐱', 
     themeColor: '#818cf8',
     showMoodChart: true,
-    showCalendar: true
+    showCalendar: true,
+    aiProvider: 'Gemini', // Default
+    apiKey: '',
+    customModel: ''
   });
   
   // Avatar Upload State
@@ -167,7 +183,10 @@ export const App: React.FC = () => {
             setUserProfile({ 
                 ...parsed, 
                 showMoodChart: parsed.showMoodChart ?? true,
-                showCalendar: parsed.showCalendar ?? true 
+                showCalendar: parsed.showCalendar ?? true,
+                aiProvider: parsed.aiProvider || 'Gemini',
+                apiKey: parsed.apiKey || '',
+                customModel: parsed.customModel || ''
             });
         }
 
@@ -251,43 +270,61 @@ export const App: React.FC = () => {
   const handleSaveEntry = async () => {
     if (!newEntryText.trim() && newEntryAttachments.length === 0) return;
 
-    setIsAnalyzing(true);
-    try {
-      const analysis = await analyzeDiaryEntry(newEntryText, newEntryAttachments);
-      
-      // Determine date: use filterDate if set, otherwise current time
-      let entryDate = new Date();
-      if (filterDate) {
-          // preserve current time but on selected date
-          const selected = new Date(filterDate);
-          entryDate.setFullYear(selected.getFullYear());
-          entryDate.setMonth(selected.getMonth());
-          entryDate.setDate(selected.getDate());
-      }
+    let analysis: Partial<DiaryEntry> = {};
 
-      const newEntry: DiaryEntry = {
+    if (useAIAnalysis) {
+        setIsAnalyzing(true);
+        try {
+            const aiConfig: AIConfig = {
+                provider: userProfile.aiProvider,
+                apiKey: userProfile.apiKey,
+                model: userProfile.customModel
+            };
+            analysis = await analyzeDiaryEntry(newEntryText, newEntryAttachments, aiConfig);
+        } catch (e) {
+            console.error(e);
+            alert("分析失败，将保存为手动模式。");
+            analysis = { moodScore: 5, tags: ['分析失败'], summary: "自动分析未完成", advice: "" };
+        } finally {
+            setIsAnalyzing(false);
+        }
+    } else {
+        // Manual Mode
+        analysis = {
+            moodScore: manualMoodScore,
+            tags: ['手动记录'],
+            summary: newEntryText.length > 30 ? newEntryText.substring(0, 30) + "..." : newEntryText,
+            advice: "记录本身就是一种疗愈。"
+        };
+    }
+      
+    // Determine date: use filterDate if set, otherwise current time
+    let entryDate = new Date();
+    if (filterDate) {
+        // preserve current time but on selected date
+        const selected = new Date(filterDate);
+        entryDate.setFullYear(selected.getFullYear());
+        entryDate.setMonth(selected.getMonth());
+        entryDate.setDate(selected.getDate());
+    }
+
+    const newEntry: DiaryEntry = {
         id: Date.now().toString(),
         content: newEntryText,
         date: entryDate.toISOString(),
         moodScore: analysis.moodScore || 5,
         tags: analysis.tags || [],
         summary: analysis.summary || "暂无总结",
-        advice: analysis.advice || "继续加油！",
+        advice: analysis.advice || "",
         attachments: newEntryAttachments
-      };
-      
-      setEntries([newEntry, ...entries]);
-      setNewEntryText('');
-      setNewEntryAttachments([]);
-      setFilterDate(''); // Reset filter after saving
-      setShowDateFilter(false);
-      setView(AppView.DASHBOARD);
-    } catch (e) {
-      console.error(e);
-      alert("分析失败，请重试。");
-    } finally {
-      setIsAnalyzing(false);
-    }
+    };
+    
+    setEntries([newEntry, ...entries]);
+    setNewEntryText('');
+    setNewEntryAttachments([]);
+    setFilterDate(''); // Reset filter after saving
+    setShowDateFilter(false);
+    setView(AppView.DASHBOARD);
   };
 
   const handleDeleteEntry = (id: string) => {
@@ -323,7 +360,12 @@ export const App: React.FC = () => {
         
         setIsTranscribing(true);
         try {
-            const text = await transcribeAudio(base64Audio, 'audio/webm');
+            const aiConfig: AIConfig = {
+                provider: userProfile.aiProvider,
+                apiKey: userProfile.apiKey,
+                model: userProfile.customModel
+            };
+            const text = await transcribeAudio(base64Audio, 'audio/webm', aiConfig);
             setNewEntryText(prev => (prev ? prev + " " + text : text));
         } catch (error) {
             console.error(error);
@@ -554,7 +596,7 @@ export const App: React.FC = () => {
 
     const { days, firstDay } = getDaysInMonth(calendarMonth);
     const today = new Date();
-    const isCurrentMonth = today.getMonth() === calendarMonth.getMonth() && today.getFullYear() === calendarMonth.getFullYear();
+    const isCurrentMonth = today.getMonth() && today.getFullYear() === calendarMonth.getFullYear();
 
     const changeMonth = (delta: number) => {
         const newDate = new Date(calendarMonth);
@@ -821,6 +863,7 @@ export const App: React.FC = () => {
                     )}
 
                     {/* AI Analysis */}
+                    {selectedEntry.summary && (
                     <div className="bg-gradient-to-br from-primary/5 to-secondary/5 p-5 rounded-3xl border border-primary/10">
                          <div className="flex items-center gap-2 mb-3 text-primary font-bold">
                              <BrainCircuit size={18} />
@@ -831,13 +874,18 @@ export const App: React.FC = () => {
                                  <span className="text-xs font-bold text-slate-400 uppercase">总结</span>
                                  <p className="text-sm text-slate-600 italic">"{selectedEntry.summary}"</p>
                              </div>
+                             {selectedEntry.advice && (
+                             <>
                              <div className="h-px bg-primary/10 w-full my-2"></div>
                              <div>
                                  <span className="text-xs font-bold text-slate-400 uppercase">建议</span>
                                  <p className="text-sm text-slate-700 font-bold">✨ {selectedEntry.advice}</p>
                              </div>
+                             </>
+                             )}
                          </div>
                     </div>
+                    )}
                     
                     <div className="h-8"></div> {/* Bottom Spacer within scroll */}
                 </div>
@@ -1151,14 +1199,51 @@ export const App: React.FC = () => {
                     <div className="w-2 h-6 bg-primary rounded-full"></div>
                     记录美好此刻
                 </div>
-                {filterDate && (
-                    <div className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold flex items-center gap-1">
-                        <Calendar size={12} />
-                        补写: {filterDate}
-                        <button onClick={() => { setFilterDate(''); }} className="ml-1 hover:bg-primary/20 rounded-full p-0.5"><X size={10} /></button>
+                <div className="flex items-center gap-2">
+                    {filterDate && (
+                        <div className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold flex items-center gap-1">
+                            <Calendar size={12} />
+                            补写: {filterDate}
+                            <button onClick={() => { setFilterDate(''); }} className="ml-1 hover:bg-primary/20 rounded-full p-0.5"><X size={10} /></button>
+                        </div>
+                    )}
+                </div>
+            </h2>
+            
+            {/* AI Toggle and Manual Mood Controls */}
+            <div className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-100 mb-4 shadow-sm">
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={() => setUseAIAnalysis(!useAIAnalysis)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${useAIAnalysis ? 'bg-primary/10 text-primary ring-1 ring-primary/20' : 'bg-slate-100 text-slate-500'}`}
+                    >
+                        {useAIAnalysis ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                        <span>AI 智能分析</span>
+                    </button>
+                    {!useAIAnalysis && (
+                        <span className="text-xs text-slate-400">已关闭</span>
+                    )}
+                </div>
+
+                {!useAIAnalysis && (
+                    <div className="flex items-center gap-3 animate-fadeIn">
+                         <div className="text-xs font-bold text-slate-500 flex items-center gap-1">
+                             <Smile size={14} className="text-primary" />
+                             心情: {manualMoodScore}
+                         </div>
+                         <input 
+                            type="range" 
+                            min="1" 
+                            max="10" 
+                            step="1" 
+                            value={manualMoodScore} 
+                            onChange={(e) => setManualMoodScore(parseInt(e.target.value))}
+                            className="w-24 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                         />
                     </div>
                 )}
-            </h2>
+            </div>
+
             <div className="bg-white p-2 rounded-[2rem] shadow-sm border border-slate-100">
                 <div className="relative bg-slate-50 rounded-[1.5rem] border border-slate-100/50 transition-colors focus-within:bg-white focus-within:border-primary/20 focus-within:ring-4 focus-within:ring-primary/5">
                     <textarea
@@ -1341,6 +1426,89 @@ export const App: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* AI Configuration Section */}
+                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-100 rounded-full -mr-10 -mt-10 blur-2xl opacity-50"></div>
+                        <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 relative z-10">
+                            <Cpu size={16} className="text-blue-500" />
+                            AI 设置
+                        </h3>
+                        
+                        <div className="space-y-4 relative z-10">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">AI 模型提供商</label>
+                                <div className="grid grid-cols-3 gap-2 p-1 bg-slate-50 rounded-xl">
+                                    <button
+                                        onClick={() => setUserProfile({...userProfile, aiProvider: 'Gemini'})}
+                                        className={`py-2 rounded-lg text-[10px] font-bold transition-all ${userProfile.aiProvider === 'Gemini' ? 'bg-white shadow-sm text-primary' : 'text-slate-500'}`}
+                                    >
+                                        Gemini
+                                    </button>
+                                    <button
+                                        onClick={() => setUserProfile({...userProfile, aiProvider: 'DeepSeek'})}
+                                        className={`py-2 rounded-lg text-[10px] font-bold transition-all ${userProfile.aiProvider === 'DeepSeek' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}
+                                    >
+                                        DeepSeek
+                                    </button>
+                                    <button
+                                        onClick={() => setUserProfile({...userProfile, aiProvider: 'SiliconFlow'})}
+                                        className={`py-2 rounded-lg text-[10px] font-bold transition-all ${userProfile.aiProvider === 'SiliconFlow' ? 'bg-white shadow-sm text-purple-600' : 'text-slate-500'}`}
+                                    >
+                                        SiliconFlow
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">自定义 API Key</label>
+                                <div className="relative">
+                                    <input 
+                                        type="password"
+                                        value={userProfile.apiKey || ''}
+                                        onChange={(e) => setUserProfile({...userProfile, apiKey: e.target.value})}
+                                        className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border-none focus:ring-2 focus:ring-primary/20 text-slate-700 text-sm font-mono tracking-wide"
+                                        placeholder={
+                                            userProfile.aiProvider === 'Gemini' ? "默认使用内置 Key (可选)" :
+                                            userProfile.aiProvider === 'DeepSeek' ? "输入 DeepSeek API Key" :
+                                            "输入 SiliconFlow API Key"
+                                        }
+                                    />
+                                    <div className="absolute right-3 top-2.5 text-slate-400 pointer-events-none">
+                                        <Zap size={14} />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {userProfile.aiProvider === 'SiliconFlow' && (
+                                <div className="animate-fadeIn">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">模型名称 (SiliconFlow)</label>
+                                    <div className="relative">
+                                        <input 
+                                            type="text"
+                                            value={userProfile.customModel || ''}
+                                            onChange={(e) => setUserProfile({...userProfile, customModel: e.target.value})}
+                                            className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border-none focus:ring-2 focus:ring-primary/20 text-slate-700 text-sm font-mono tracking-wide"
+                                            placeholder="e.g. deepseek-ai/DeepSeek-V3"
+                                        />
+                                        <div className="absolute right-3 top-2.5 text-slate-400 pointer-events-none">
+                                            <Server size={14} />
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-1">留空则默认使用 deepseek-ai/DeepSeek-V3</p>
+                                </div>
+                            )}
+
+                            <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+                                {userProfile.aiProvider === 'Gemini' 
+                                    ? "默认使用内置的 Google Gemini API。如需使用自己的 Key，请在此填入。" 
+                                    : userProfile.aiProvider === 'DeepSeek' 
+                                        ? "DeepSeek API 仅支持文本分析与对话。图片/视频/语音分析将自动回退至 Gemini。"
+                                        : "SiliconFlow 支持多种开源模型。图片/视频/语音分析将自动回退至 Gemini。"
+                                }
+                            </p>
+                        </div>
+                    </div>
+
                     {/* Appearance */}
                     <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden">
                         <div className="absolute bottom-0 left-0 w-32 h-32 bg-accent/5 rounded-full -ml-10 -mb-10 blur-2xl"></div>
@@ -1429,7 +1597,7 @@ export const App: React.FC = () => {
                     </div>
                     
                     <div className="text-center text-slate-300 text-[10px] pb-2">
-                        Mindful Moments v1.6 &bull; Made with 💖 & Gemini
+                        Mindful Moments v1.9 &bull; Made with 💖 & AI
                     </div>
                 </div>
             </div>
@@ -1441,7 +1609,15 @@ export const App: React.FC = () => {
       {/* Chat View Rendering - already handled above, but ensuring logic flow */}
       {view === AppView.CHAT && (
             <div className="h-full w-full animate-fadeIn md:p-6 md:pb-6 pb-24 md:h-screen flex flex-col box-border absolute top-0 left-0 bg-white">
-                 <ChatAssistant entries={entries} onStartLiveSession={() => setView(AppView.LIVE_SESSION)} />
+                 <ChatAssistant 
+                    entries={entries} 
+                    onStartLiveSession={() => setView(AppView.LIVE_SESSION)}
+                    aiConfig={{
+                        provider: userProfile.aiProvider,
+                        apiKey: userProfile.apiKey,
+                        model: userProfile.customModel
+                    }}
+                 />
             </div>
         )}
 

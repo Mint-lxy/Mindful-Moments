@@ -1,29 +1,29 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, Headphones } from 'lucide-react';
-import { createChatSession } from '../services/geminiService';
-import { ChatMessage, DiaryEntry } from '../types';
-import { GenerateContentResponse } from '@google/genai';
+import { createChatSession, MultiProviderChat } from '../services/geminiService';
+import { ChatMessage, DiaryEntry, AIConfig } from '../types';
 
 interface ChatAssistantProps {
   entries: DiaryEntry[];
   onStartLiveSession: () => void;
+  aiConfig: AIConfig;
 }
 
-export const ChatAssistant: React.FC<ChatAssistantProps> = ({ entries, onStartLiveSession }) => {
+export const ChatAssistant: React.FC<ChatAssistantProps> = ({ entries, onStartLiveSession, aiConfig }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: 'init', role: 'model', text: '你好！我是你的心情助手。想聊聊最近发生的事情，或者需要一些建议吗？', timestamp: Date.now() }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const chatSessionRef = useRef<any>(null);
+  const chatSessionRef = useRef<MultiProviderChat | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Initialize chat session with context
+  // Initialize chat session with context - Re-init if config changes
   useEffect(() => {
     const context = entries.slice(0, 5).map(e => `[${new Date(e.date).toLocaleDateString('zh-CN')}]: 心情 ${e.moodScore}/10. 内容: ${e.content}`).join('\n');
-    chatSessionRef.current = createChatSession(context);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    chatSessionRef.current = createChatSession(context, aiConfig);
+  }, [entries, aiConfig]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -50,11 +50,12 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ entries, onStartLi
 
     try {
       if (!chatSessionRef.current) {
-         chatSessionRef.current = createChatSession("用户暂无近期日记。");
+         // Fallback init
+         chatSessionRef.current = createChatSession("用户暂无近期日记。", aiConfig);
       }
 
-      const result = await chatSessionRef.current.sendMessage({ message: userMsg.text });
-      const responseText = (result as GenerateContentResponse).text;
+      // Using the unified sendMessage method from MultiProviderChat
+      const responseText = await chatSessionRef.current.sendMessage(userMsg.text);
 
       const botMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -149,7 +150,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ entries, onStartLi
                         handleSend();
                     }
                 }}
-                placeholder="聊聊你的想法..."
+                placeholder={aiConfig.provider === 'DeepSeek' ? "通过 DeepSeek 思考中..." : "聊聊你的想法..."}
                 className="flex-1 px-4 py-2.5 max-h-32 min-h-[44px] bg-transparent text-sm resize-none focus:outline-none placeholder-slate-400"
                 rows={1}
             />
