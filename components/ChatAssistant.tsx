@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, Headphones } from 'lucide-react';
 import { createChatSession } from '../services/geminiService';
@@ -82,10 +81,10 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ entries, onStartLi
   const HeaderSpacer = () => <div className="w-full h-12 flex-shrink-0" />;
 
   return (
-    <div className="flex flex-col h-full bg-white md:rounded-3xl shadow-sm md:border border-slate-100 overflow-hidden relative pb-[env(safe-area-inset-bottom)]">
+    <div className="flex flex-col h-full bg-white md:rounded-3xl shadow-sm md:border border-slate-100 overflow-hidden relative">
       
       {/* Header Container */}
-      <div className="relative z-10 bg-white/95 backdrop-blur-md border-b border-slate-50">
+      <div className="relative z-10 bg-white/95 backdrop-blur-md border-b border-slate-50 flex-shrink-0">
         {/* Status Bar Safe Area */}
         <div className="safe-area-top"></div>
         {/* Alignment Spacer matching Home Page */}
@@ -137,29 +136,30 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ entries, onStartLi
         <div className="h-6"></div>
       </div>
 
-{/* Input Area - Seamless Connection */}
-<div className="p-3 md:p-4 bg-white z-10 pb-[env(safe-area-inset-bottom)] md:pb-4 border-t border-slate-50 md:border-t-0">
-    <div className="flex gap-2 items-end bg-slate-50 p-1.5 rounded-3xl border border-slate-100 focus-within:ring-2 focus-within:ring-primary/10 focus-within:border-primary/30 transition-all">
-        <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                }
-            }}
-            placeholder="聊聊你的想法..."
-            className="flex-1 px-4 py-2.5 max-h-32 min-h-[44px] bg-transparent text-sm resize-none focus:outline-none placeholder-slate-400"
-            rows={1}
-        />
-        <button 
-            onClick={handleSend}
-            disabled={isLoading || !input.trim()}
-            className="p-2.5 bg-primary text-white rounded-full hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-primary/20 mb-0.5 mr-0.5"
-        >
-            <Send size={18} />
-        </button>
+      {/* Input Area - Seamless Connection */}
+      {/* pb-16 to sit on top of nav bar (h-16) + bottom safe area */}
+      <div className="p-3 md:p-4 bg-white z-10 pb-16 md:pb-4 border-t border-slate-50 md:border-t-0 flex-shrink-0">
+        <div className="flex gap-2 items-end bg-slate-50 p-1.5 rounded-3xl border border-slate-100 focus-within:ring-2 focus-within:ring-primary/10 focus-within:border-primary/30 transition-all">
+            <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                    }
+                }}
+                placeholder="聊聊你的想法..."
+                className="flex-1 px-4 py-2.5 max-h-32 min-h-[44px] bg-transparent text-sm resize-none focus:outline-none placeholder-slate-400"
+                rows={1}
+            />
+            <button 
+                onClick={handleSend}
+                disabled={isLoading || !input.trim()}
+                className="p-2.5 bg-primary text-white rounded-full hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-primary/20 mb-0.5 mr-0.5"
+            >
+                <Send size={18} />
+            </button>
         </div>
       </div>
     </div>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { DiaryEntry, AppView, UserProfile, DailyJoke } from './types';
 import { analyzeDiaryEntry, transcribeAudio, fetchDailyJoke } from './services/geminiService';
@@ -40,7 +39,8 @@ import {
   Zap,
   AlertTriangle,
   Maximize2,
-  Tag
+  Tag,
+  Pipette
 } from 'lucide-react';
 
 // Cute Color Palette
@@ -240,6 +240,14 @@ export const App: React.FC = () => {
     return '晚上好';
   };
 
+  const checkSecureContext = () => {
+      if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+          alert("安全限制：为了保护您的隐私，浏览器要求在 HTTPS 环境下才能使用摄像头和麦克风。请确保您使用 https:// 访问此应用。");
+          return false;
+      }
+      return true;
+  };
+
   const handleSaveEntry = async () => {
     if (!newEntryText.trim() && newEntryAttachments.length === 0) return;
 
@@ -295,6 +303,7 @@ export const App: React.FC = () => {
   };
 
   const startRecording = async () => {
+    if (!checkSecureContext()) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -329,7 +338,7 @@ export const App: React.FC = () => {
       setIsRecording(true);
     } catch (err) {
       console.error("Error accessing microphone", err);
-      alert("无法访问麦克风");
+      alert("无法访问麦克风。请检查系统权限或 HTTPS 设置。");
     }
   };
 
@@ -411,6 +420,8 @@ export const App: React.FC = () => {
   // --- Camera Logic ---
 
   const startCamera = async (mode: 'user' | 'environment' = 'environment') => {
+    if (!checkSecureContext()) return;
+    
     setIsCameraOpen(true);
     // Stop any existing stream first
     if (cameraStream) {
@@ -428,7 +439,7 @@ export const App: React.FC = () => {
         }
     } catch (err) {
         console.error("Camera access failed:", err);
-        alert("无法访问摄像头。请检查权限或使用文件上传。");
+        alert("无法访问摄像头。请检查是否允许了浏览器权限，或确保使用了 HTTPS。");
         setIsCameraOpen(false);
     }
   };
@@ -503,11 +514,11 @@ export const App: React.FC = () => {
     return true;
   });
 
-  // Calculate layout classes based on view
+  // Main Container Logic:
+  // Root must be 100dvh + overflow-hidden to contain the app in viewport
+  // Scrolling is handled by the <main> element
+  const mainContainerClasses = "h-[100dvh] w-full bg-slate-50 text-slate-900 font-sans overflow-hidden relative flex flex-col md:flex-row";
   const isChatView = view === AppView.CHAT;
-  const mainContainerClasses = isChatView 
-    ? "h-screen w-full overflow-hidden flex flex-col md:flex-row bg-slate-50"
-    : "min-h-screen bg-slate-50 text-slate-900 font-sans pb-24 md:pb-0 md:pl-20 transition-colors duration-500 overflow-x-hidden relative";
 
   const isEmojiAvatar = (avatar: string) => {
       return !avatar.startsWith('data:image') && !avatar.startsWith('http');
@@ -953,8 +964,12 @@ export const App: React.FC = () => {
 </nav>
 
       {/* Main Content Area */}
-      <main className={`flex-1 ${isChatView ? 'h-full md:pl-20 overflow-hidden' : 'max-w-4xl mx-auto p-4 md:p-8'}`}>
+      {/* Scrollable logic moved here */}
+      <main className={`flex-1 ${isChatView ? 'h-full md:pl-20 overflow-hidden' : 'h-full overflow-y-auto md:pl-20'}`}>
         
+        {/* Container inside scrollable area */}
+        <div className={!isChatView ? 'max-w-4xl mx-auto p-4 md:p-8 pb-32 md:pb-8' : ''}>
+
         {/* Dashboard Header */}
         {!isChatView && view !== AppView.SETTINGS && (
             <>
@@ -977,7 +992,7 @@ export const App: React.FC = () => {
         )}
 
         {view === AppView.DASHBOARD && (
-          <div className="space-y-5 animate-fadeIn pb-10">
+          <div className="space-y-5 animate-fadeIn">
             {/* Daily Joke Widget - Compacted UI */}
             <div className="relative bg-white rounded-3xl p-4 shadow-sm border border-slate-100 overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-100 rounded-full -mr-16 -mt-16 blur-3xl opacity-50"></div>
@@ -1245,14 +1260,8 @@ export const App: React.FC = () => {
         </div>
         )}
 
-        {view === AppView.CHAT && (
-            <div className="h-full w-full animate-fadeIn md:p-6 md:pb-6 pb-24 md:h-screen flex flex-col box-border">
-                 <ChatAssistant entries={entries} onStartLiveSession={() => setView(AppView.LIVE_SESSION)} />
-            </div>
-        )}
-
         {view === AppView.SETTINGS && (
-            <div className="max-w-md mx-auto animate-fadeIn pb-24">
+            <div className="max-w-md mx-auto animate-fadeIn">
                  <SafeTopSpacer />
                  <div className="flex items-center gap-4 mb-6">
                      <button onClick={() => setView(AppView.DASHBOARD)} className="p-2 -ml-2 rounded-full hover:bg-white/50 text-slate-500">
@@ -1340,7 +1349,7 @@ export const App: React.FC = () => {
                             主题与功能
                         </h3>
                         
-                        <div className="grid grid-cols-4 gap-3 relative z-10 mb-6">
+                        <div className="grid grid-cols-5 gap-3 relative z-10 mb-6">
                             {PRESET_COLORS.map((color) => (
                                 <button
                                     key={color.hex}
@@ -1360,6 +1369,25 @@ export const App: React.FC = () => {
                                     </span>
                                 </button>
                             ))}
+                            {/* Custom Color Picker Button */}
+                            <label className={`flex flex-col items-center gap-1.5 p-1.5 rounded-xl border-2 transition-all cursor-pointer ${
+                                !PRESET_COLORS.some(c => c.hex === userProfile.themeColor)
+                                ? 'border-primary bg-primary/5 scale-105' 
+                                : 'border-transparent hover:bg-slate-50'
+                            }`}>
+                                <div className="w-8 h-8 rounded-full shadow-sm bg-gradient-to-br from-red-400 via-green-400 to-blue-400 flex items-center justify-center text-white">
+                                    <Pipette size={14} />
+                                </div>
+                                <span className={`text-[9px] font-bold ${!PRESET_COLORS.some(c => c.hex === userProfile.themeColor) ? 'text-primary' : 'text-slate-400'}`}>
+                                    自定义
+                                </span>
+                                <input 
+                                    type="color" 
+                                    className="sr-only"
+                                    value={userProfile.themeColor}
+                                    onChange={(e) => setUserProfile({...userProfile, themeColor: e.target.value})}
+                                />
+                            </label>
                         </div>
 
                          <div className="space-y-4 border-t border-slate-100 pt-4 relative z-10">
@@ -1406,8 +1434,17 @@ export const App: React.FC = () => {
                 </div>
             </div>
         )}
-
+        
+        </div> {/* End of scrollable inner container */}
       </main>
+
+      {/* Chat View Rendering - already handled above, but ensuring logic flow */}
+      {view === AppView.CHAT && (
+            <div className="h-full w-full animate-fadeIn md:p-6 md:pb-6 pb-24 md:h-screen flex flex-col box-border absolute top-0 left-0 bg-white">
+                 <ChatAssistant entries={entries} onStartLiveSession={() => setView(AppView.LIVE_SESSION)} />
+            </div>
+        )}
+
     </div>
   );
 };
