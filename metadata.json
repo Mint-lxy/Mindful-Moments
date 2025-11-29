@@ -1,0 +1,8 @@
+{
+  "name": "Mindful Moments",
+  "description": "A smart mood diary and mental wellness companion powered by Gemini. Features real-time voice therapy, mood tracking, and AI-driven insights.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
